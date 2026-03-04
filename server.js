@@ -1,88 +1,18 @@
-app.post("/activate.php", (req, res) => {
-
-  const android_id = req.body.android_id;
-  const shareloc = req.body.shareloc;
-  const paket = req.body.paket;
-
-  if (!android_id || !shareloc || !paket) {
-    return res.json({status:"error"});
-  }
-
-  const parts = shareloc.split(",");
-
-  const lat = parts[0];
-  const lng = parts[1];
-
-  const now = Date.now();
-
-  let months = 1;
-
-  if (paket === "2Bulan") months = 2;
-  if (paket === "3Bulan") months = 3;
-
-  const expire = now + (months * 30 * 24 * 60 * 60 * 1000);
-
-  const sql = `
-  INSERT INTO CLIENTSPRESENSI (android_id,lat,lng,expire,status)
-  VALUES (?,?,?,?,?)
-  ON DUPLICATE KEY UPDATE lat=?,lng=?`;
-
-  db.query(sql,
-    [android_id,lat,lng,expire,"pending",lat,lng],
-    (err,result)=>{
-
-      if(err){
-        return res.json({status:"error"});
-      }
-
-      const sql2 = "SELECT status FROM CLIENTSPRESENSI WHERE android_id=? LIMIT 1";
-
-      db.query(sql2,[android_id],(err,row)=>{
-
-        if(err || row.length===0){
-          return res.json({status:"error"});
-        }
-
-        const status = row[0].status;
-
-        if(status === "pending"){
-          return res.json({status:"pending"});
-        }
-
-        if(status === "active"){
-
-          const secret = "rahasia_siap_tuba";
-
-          const sign = require("crypto")
-            .createHash("sha256")
-            .update(android_id + lat + lng + expire + secret)
-            .digest("hex");
-
-          return res.json({
-            status:"success",
-            lat:lat,
-            lng:lng,
-            expire:expire,
-            sign:sign
-          });
-
-        }
-
-        return res.json({status:"error"});
-
-      });
-
-    });
-
-});const express = require("express");
+const express = require("express");
 const mysql = require("mysql2");
 const crypto = require("crypto");
 
 const app = express();
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-const secret = "rahasia_siap_tuba";
+const SECRET = "rahasia_siap_tuba";
+
+
+// =======================
+// MYSQL CONNECTION
+// =======================
 
 const db = mysql.createConnection({
   host: process.env.MYSQLHOST,
@@ -92,13 +22,26 @@ const db = mysql.createConnection({
   database: process.env.MYSQLDATABASE
 });
 
-app.post("/activate.php", (req, res) => {
+db.connect(err=>{
+  if(err){
+    console.log("DB ERROR:",err);
+  }else{
+    console.log("MYSQL CONNECTED");
+  }
+});
+
+
+// =======================
+// ACTIVATE DEVICE
+// =======================
+
+app.post("/activate.php",(req,res)=>{
 
   const android_id = req.body.android_id;
   const shareloc = req.body.shareloc;
   const paket = req.body.paket;
 
-  if (!android_id || !shareloc || !paket) {
+  if(!android_id || !shareloc || !paket){
     return res.json({status:"error",msg:"invalid_input"});
   }
 
@@ -107,10 +50,11 @@ app.post("/activate.php", (req, res) => {
   const lng = parts[1];
 
   let months = 1;
-  if (paket === "2Bulan") months = 2;
-  if (paket === "3Bulan") months = 3;
 
-  const expire = Date.now() + (months * 30 * 24 * 60 * 60 * 1000);
+  if(paket==="2Bulan") months = 2;
+  if(paket==="3Bulan") months = 3;
+
+  const expire = Date.now() + (months*30*24*60*60*1000);
 
   const sql = `
   INSERT INTO CLIENTSPRESENSI (android_id,lat,lng,expire,status)
@@ -118,73 +62,100 @@ app.post("/activate.php", (req, res) => {
   ON DUPLICATE KEY UPDATE lat=?,lng=?,expire=?,status=?`;
 
   db.query(sql,
-    [android_id,lat,lng,expire,"active",lat,lng,expire,"active"]
-  );
+    [android_id,lat,lng,expire,"active",lat,lng,expire,"active"],
+    (err,result)=>{
 
-  const sign = crypto
-    .createHash("sha256")
-    .update(android_id+lat+lng+expire+secret)
-    .digest("hex");
+      if(err){
+        console.log(err);
+        return res.json({status:"error"});
+      }
 
-  res.json({
-    status:"success",
-    lat:lat,
-    lng:lng,
-    expire:expire,
-    sign:sign
-  });
+      const sign = crypto
+        .createHash("sha256")
+        .update(android_id+lat+lng+expire+SECRET)
+        .digest("hex");
+
+      res.json({
+        status:"success",
+        lat:lat,
+        lng:lng,
+        expire:expire,
+        sign:sign
+      });
+
+    });
 
 });
 
-app.listen(process.env.PORT || 3000);
 
-app.get("/check", (req, res) => {
+// =======================
+// CHECK LICENSE
+// =======================
+
+app.get("/check",(req,res)=>{
 
   const android_id = req.query.id;
 
-  if (!android_id) {
-    return res.json({ status: "invalid" });
+  if(!android_id){
+    return res.json({status:"invalid"});
   }
 
   const sql = "SELECT lat,lng,expire,status FROM CLIENTSPRESENSI WHERE android_id=? LIMIT 1";
 
-  db.query(sql, [android_id], (err, result) => {
+  db.query(sql,[android_id],(err,result)=>{
 
-    if (err) {
-      return res.json({ status: "error" });
+    if(err){
+      return res.json({status:"error"});
     }
 
-    if (result.length === 0) {
-      return res.json({ status: "invalid" });
+    if(result.length===0){
+      return res.json({status:"invalid"});
     }
 
     const row = result[0];
-
     const now = Date.now();
 
-    if (row.status !== "active") {
-      return res.json({ status: "invalid" });
+    if(row.status!=="active"){
+      return res.json({status:"invalid"});
     }
 
-    if (now > row.expire) {
-      return res.json({ status: "expired" });
+    if(now > row.expire){
+      return res.json({status:"expired"});
     }
-
-    const secret = "rahasia_siap_tuba";
 
     const sign = crypto
       .createHash("sha256")
-      .update(android_id + row.lat + row.lng + row.expire + secret)
+      .update(android_id+row.lat+row.lng+row.expire+SECRET)
       .digest("hex");
 
     res.json({
-      status: "active",
-      lat: row.lat,
-      lng: row.lng,
-      expire: row.expire,
-      sign: sign
+      status:"active",
+      lat:row.lat,
+      lng:row.lng,
+      expire:row.expire,
+      sign:sign
     });
 
   });
 
+});
+
+
+// =======================
+// ROOT TEST
+// =======================
+
+app.get("/",(req,res)=>{
+  res.send("Activation server running");
+});
+
+
+// =======================
+// START SERVER
+// =======================
+
+const PORT = process.env.PORT || 8080;
+
+app.listen(PORT,()=>{
+  console.log("Server running on port "+PORT);
 });
