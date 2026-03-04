@@ -61,3 +61,48 @@ app.post("/activate.php", (req, res) => {
 });
 
 app.listen(process.env.PORT || 3000);
+
+app.get("/check", (req, res) => {
+
+  const android_id = req.query.id;
+
+  if (!android_id) {
+    return res.json({
+      status: "invalid"
+    });
+  }
+
+  const sql = "SELECT lat,lng,expire,status FROM CLIENTSPRESENSI WHERE android_id=? LIMIT 1";
+
+  db.query(sql, [android_id], (err, result) => {
+
+    if (err) {
+      return res.json({ status: "error" });
+    }
+
+    if (result.length === 0) {
+      return res.json({ status: "invalid" });
+    }
+
+    const row = result[0];
+
+    const now = Date.now();
+
+    if (row.status !== "active") {
+      return res.json({ status: "invalid" });
+    }
+
+    if (now > row.expire) {
+      return res.json({ status: "expired" });
+    }
+
+    res.json({
+      status: "active",
+      lat: row.lat,
+      lng: row.lng,
+      expire: row.expire
+    });
+
+  });
+
+});
