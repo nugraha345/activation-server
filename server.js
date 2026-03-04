@@ -1,4 +1,80 @@
-const express = require("express");
+app.post("/activate.php", (req, res) => {
+
+  const android_id = req.body.android_id;
+  const shareloc = req.body.shareloc;
+  const paket = req.body.paket;
+
+  if (!android_id || !shareloc || !paket) {
+    return res.json({status:"error"});
+  }
+
+  const parts = shareloc.split(",");
+
+  const lat = parts[0];
+  const lng = parts[1];
+
+  const now = Date.now();
+
+  let months = 1;
+
+  if (paket === "2Bulan") months = 2;
+  if (paket === "3Bulan") months = 3;
+
+  const expire = now + (months * 30 * 24 * 60 * 60 * 1000);
+
+  const sql = `
+  INSERT INTO CLIENTSPRESENSI (android_id,lat,lng,expire,status)
+  VALUES (?,?,?,?,?)
+  ON DUPLICATE KEY UPDATE lat=?,lng=?`;
+
+  db.query(sql,
+    [android_id,lat,lng,expire,"pending",lat,lng],
+    (err,result)=>{
+
+      if(err){
+        return res.json({status:"error"});
+      }
+
+      const sql2 = "SELECT status FROM CLIENTSPRESENSI WHERE android_id=? LIMIT 1";
+
+      db.query(sql2,[android_id],(err,row)=>{
+
+        if(err || row.length===0){
+          return res.json({status:"error"});
+        }
+
+        const status = row[0].status;
+
+        if(status === "pending"){
+          return res.json({status:"pending"});
+        }
+
+        if(status === "active"){
+
+          const secret = "rahasia_siap_tuba";
+
+          const sign = require("crypto")
+            .createHash("sha256")
+            .update(android_id + lat + lng + expire + secret)
+            .digest("hex");
+
+          return res.json({
+            status:"success",
+            lat:lat,
+            lng:lng,
+            expire:expire,
+            sign:sign
+          });
+
+        }
+
+        return res.json({status:"error"});
+
+      });
+
+    });
+
+});const express = require("express");
 const mysql = require("mysql2");
 const crypto = require("crypto");
 
