@@ -10,9 +10,9 @@ app.use(express.json());
 const SECRET = "rahasia_siap_tuba";
 
 
-// =========================
+// =======================
 // MYSQL CONNECTION
-// =========================
+// =======================
 
 const db = mysql.createConnection({
   host: process.env.MYSQLHOST,
@@ -24,16 +24,16 @@ const db = mysql.createConnection({
 
 db.connect(err=>{
   if(err){
-    console.log("MYSQL ERROR:",err);
+    console.log("MYSQL ERROR",err);
   }else{
     console.log("MYSQL CONNECTED");
   }
 });
 
 
-// =========================
+// =======================
 // ACTIVATE REQUEST
-// =========================
+// =======================
 
 app.post("/activate.php",(req,res)=>{
 
@@ -42,7 +42,7 @@ app.post("/activate.php",(req,res)=>{
   const paket = req.body.paket;
 
   if(!android_id || !shareloc || !paket){
-    return res.json({status:"error",msg:"invalid_input"});
+    return res.json({status:"error"});
   }
 
   const parts = shareloc.split(",");
@@ -59,19 +59,28 @@ app.post("/activate.php",(req,res)=>{
   const sql = `
   INSERT INTO CLIENTSPRESENSI (android_id,lat,lng,expire,status)
   VALUES (?,?,?,?,?)
-  ON DUPLICATE KEY UPDATE lat=?,lng=?,expire=?,status=?`;
+  ON DUPLICATE KEY UPDATE lat=?,lng=?`;
 
   db.query(sql,
-    [android_id,lat,lng,expire,"pending",lat,lng,expire,"pending"],
-    (err,result)=>{
+    [android_id,lat,lng,expire,"pending",lat,lng],
+    (err)=>{
 
       if(err){
-        console.log(err);
         return res.json({status:"error"});
       }
 
-      return res.json({
-        status:"pending"
+      const check = "SELECT status FROM CLIENTSPRESENSI WHERE android_id=?";
+
+      db.query(check,[android_id],(err,row)=>{
+
+        if(err || row.length===0){
+          return res.json({status:"error"});
+        }
+
+        res.json({
+          status:row[0].status
+        });
+
       });
 
     });
@@ -79,9 +88,9 @@ app.post("/activate.php",(req,res)=>{
 });
 
 
-// =========================
+// =======================
 // CHECK LICENSE
-// =========================
+// =======================
 
 app.get("/check",(req,res)=>{
 
@@ -93,38 +102,38 @@ app.get("/check",(req,res)=>{
 
   const sql = "SELECT lat,lng,expire,status FROM CLIENTSPRESENSI WHERE android_id=? LIMIT 1";
 
-  db.query(sql,[android_id],(err,result)=>{
+  db.query(sql,[android_id],(err,row)=>{
 
     if(err){
       return res.json({status:"error"});
     }
 
-    if(result.length===0){
+    if(row.length===0){
       return res.json({status:"invalid"});
     }
 
-    const row = result[0];
+    const data = row[0];
 
-    if(row.status !== "active"){
+    if(data.status !== "active"){
       return res.json({status:"pending"});
     }
 
     const now = Date.now();
 
-    if(now > row.expire){
+    if(now > data.expire){
       return res.json({status:"expired"});
     }
 
     const sign = crypto
       .createHash("sha256")
-      .update(android_id+row.lat+row.lng+row.expire+SECRET)
+      .update(android_id+data.lat+data.lng+data.expire+SECRET)
       .digest("hex");
 
     res.json({
       status:"active",
-      lat:row.lat,
-      lng:row.lng,
-      expire:row.expire,
+      lat:data.lat,
+      lng:data.lng,
+      expire:data.expire,
       sign:sign
     });
 
@@ -133,18 +142,45 @@ app.get("/check",(req,res)=>{
 });
 
 
-// =========================
+// =======================
+// ADMIN APPROVE
+// =======================
+
+app.get("/approve",(req,res)=>{
+
+  const id = req.query.id;
+
+  if(!id){
+    return res.send("no id");
+  }
+
+  const sql = "UPDATE CLIENTSPRESENSI SET status='active' WHERE android_id=?";
+
+  db.query(sql,[id],(err)=>{
+
+    if(err){
+      return res.send("error");
+    }
+
+    res.send("approved");
+
+  });
+
+});
+
+
+// =======================
 // ROOT TEST
-// =========================
+// =======================
 
 app.get("/",(req,res)=>{
   res.send("Activation server running");
 });
 
 
-// =========================
+// =======================
 // START SERVER
-// =========================
+// =======================
 
 const PORT = process.env.PORT || 8080;
 
