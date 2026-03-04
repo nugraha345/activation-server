@@ -67,9 +67,7 @@ app.get("/check", (req, res) => {
   const android_id = req.query.id;
 
   if (!android_id) {
-    return res.json({
-      status: "invalid"
-    });
+    return res.json({ status: "invalid" });
   }
 
   const sql = "SELECT lat,lng,expire,status FROM CLIENTSPRESENSI WHERE android_id=? LIMIT 1";
@@ -96,11 +94,19 @@ app.get("/check", (req, res) => {
       return res.json({ status: "expired" });
     }
 
+    const secret = "rahasia_siap_tuba";
+
+    const sign = crypto
+      .createHash("sha256")
+      .update(android_id + row.lat + row.lng + row.expire + secret)
+      .digest("hex");
+
     res.json({
       status: "active",
       lat: row.lat,
       lng: row.lng,
-      expire: row.expire
+      expire: row.expire,
+      sign: sign
     });
 
   });
