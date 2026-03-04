@@ -9,11 +9,6 @@ app.use(express.json());
 
 const SECRET = "rahasia_siap_tuba";
 
-
-// =======================
-// MYSQL CONNECTION
-// =======================
-
 const db = mysql.createConnection({
   host: process.env.MYSQLHOST,
   port: process.env.MYSQLPORT,
@@ -31,9 +26,12 @@ db.connect(err=>{
 });
 
 
-// =======================
-// ACTIVATE REQUEST
-// =======================
+
+/*
+================================
+ACTIVATE DEVICE
+================================
+*/
 
 app.post("/activate.php",(req,res)=>{
 
@@ -46,6 +44,7 @@ app.post("/activate.php",(req,res)=>{
   }
 
   const parts = shareloc.split(",");
+
   const lat = parts[0];
   const lng = parts[1];
 
@@ -55,6 +54,7 @@ app.post("/activate.php",(req,res)=>{
   if(paket==="3Bulan") months = 3;
 
   const expire = Date.now() + (months*30*24*60*60*1000);
+
 
   const sql = `
   INSERT INTO CLIENTSPRESENSI (android_id,lat,lng,expire,status)
@@ -88,9 +88,12 @@ app.post("/activate.php",(req,res)=>{
 });
 
 
-// =======================
-// CHECK LICENSE
-// =======================
+
+/*
+================================
+CHECK LICENSE
+================================
+*/
 
 app.get("/check",(req,res)=>{
 
@@ -126,7 +129,7 @@ app.get("/check",(req,res)=>{
 
     const sign = crypto
       .createHash("sha256")
-      .update(android_id+data.lat+data.lng+data.expire+SECRET)
+      .update(android_id + data.lat + data.lng + data.expire + SECRET)
       .digest("hex");
 
     res.json({
@@ -142,9 +145,12 @@ app.get("/check",(req,res)=>{
 });
 
 
-// =======================
-// ADMIN APPROVE
-// =======================
+
+/*
+================================
+ADMIN APPROVE
+================================
+*/
 
 app.get("/approve",(req,res)=>{
 
@@ -169,18 +175,24 @@ app.get("/approve",(req,res)=>{
 });
 
 
-// =======================
-// ROOT TEST
-// =======================
+
+/*
+================================
+ROOT TEST
+================================
+*/
 
 app.get("/",(req,res)=>{
   res.send("Activation server running");
 });
 
 
-// =======================
-// START SERVER
-// =======================
+
+/*
+================================
+START SERVER
+================================
+*/
 
 const PORT = process.env.PORT || 8080;
 
