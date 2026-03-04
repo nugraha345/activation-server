@@ -10,9 +10,9 @@ app.use(express.json());
 const SECRET = "rahasia_siap_tuba";
 
 
-// =======================
+// =========================
 // MYSQL CONNECTION
-// =======================
+// =========================
 
 const db = mysql.createConnection({
   host: process.env.MYSQLHOST,
@@ -24,16 +24,16 @@ const db = mysql.createConnection({
 
 db.connect(err=>{
   if(err){
-    console.log("DB ERROR:",err);
+    console.log("MYSQL ERROR:",err);
   }else{
     console.log("MYSQL CONNECTED");
   }
 });
 
 
-// =======================
-// ACTIVATE DEVICE
-// =======================
+// =========================
+// ACTIVATE REQUEST
+// =========================
 
 app.post("/activate.php",(req,res)=>{
 
@@ -62,7 +62,7 @@ app.post("/activate.php",(req,res)=>{
   ON DUPLICATE KEY UPDATE lat=?,lng=?,expire=?,status=?`;
 
   db.query(sql,
-    [android_id,lat,lng,expire,"active",lat,lng,expire,"active"],
+    [android_id,lat,lng,expire,"pending",lat,lng,expire,"pending"],
     (err,result)=>{
 
       if(err){
@@ -70,17 +70,8 @@ app.post("/activate.php",(req,res)=>{
         return res.json({status:"error"});
       }
 
-      const sign = crypto
-        .createHash("sha256")
-        .update(android_id+lat+lng+expire+SECRET)
-        .digest("hex");
-
-      res.json({
-        status:"success",
-        lat:lat,
-        lng:lng,
-        expire:expire,
-        sign:sign
+      return res.json({
+        status:"pending"
       });
 
     });
@@ -88,9 +79,9 @@ app.post("/activate.php",(req,res)=>{
 });
 
 
-// =======================
+// =========================
 // CHECK LICENSE
-// =======================
+// =========================
 
 app.get("/check",(req,res)=>{
 
@@ -113,11 +104,12 @@ app.get("/check",(req,res)=>{
     }
 
     const row = result[0];
-    const now = Date.now();
 
-    if(row.status!=="active"){
-      return res.json({status:"invalid"});
+    if(row.status !== "active"){
+      return res.json({status:"pending"});
     }
+
+    const now = Date.now();
 
     if(now > row.expire){
       return res.json({status:"expired"});
@@ -141,18 +133,18 @@ app.get("/check",(req,res)=>{
 });
 
 
-// =======================
+// =========================
 // ROOT TEST
-// =======================
+// =========================
 
 app.get("/",(req,res)=>{
   res.send("Activation server running");
 });
 
 
-// =======================
+// =========================
 // START SERVER
-// =======================
+// =========================
 
 const PORT = process.env.PORT || 8080;
 
